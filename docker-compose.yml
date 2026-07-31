@@ -1,0 +1,29 @@
+services:
+  database:
+    image: postgres:16-alpine
+    container_name: train-booking-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: train_user
+      POSTGRES_PASSWORD: train_password
+      POSTGRES_DB: train_booking
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - train_booking_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U train_user -d train_booking",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  train_booking_data:
