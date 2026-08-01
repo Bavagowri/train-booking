@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { journeyRouter } from "./journey.routes.js";
+import { bookingRouter } from "./booking.routes.js";
 
 export const apiRouter = Router();
 
@@ -33,3 +34,4 @@ apiRouter.get("/health", async (_req, res) => {
 });
 
 apiRouter.use("/journeys", journeyRouter);
+apiRouter.use("/bookings", bookingRouter);
