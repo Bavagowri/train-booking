@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CoachType {
+  RESERVED
+  UNRESERVED
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+model Station {
+  id         String         @id @default(cuid())
+  code       String         @unique
+  name       String
+  routeStops RouteStation[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+model Route {
+  id         String         @id @default(cuid())
+  name       String
+  routeStops RouteStation[]
+  journeys   Journey[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+model RouteStation {
+  id                  String  @id @default(cuid())
+  routeId             String
+  stationId           String
+  stopOrder           Int
+  distanceFromStartKm Decimal @db.Decimal(10, 2)
+
+  route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  station Station @relation(fields: [stationId], references: [id])
+
+  originBookings      Booking[] @relation("OriginStation")
+  destinationBookings Booking[] @relation("DestinationStation")
+
+  @@unique([routeId, stopOrder])
+  @@unique([routeId, stationId])
+  @@index([routeId, stopOrder])
+}
+
+model Journey {
+  id            String    @id @default(cuid())
+  routeId       String
+  trainNumber   String
+  departureTime DateTime
+  route         Route     @relation(fields: [routeId], references: [id])
+  bookings      Booking[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([routeId, departureTime])
+}
+
+model Coach {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  name         String
+  type         CoachType
+  displayOrder Int
+  seats        Seat[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Seat {
+  id           String    @id @default(cuid())
+  coachId      String
+  seatNumber   String
+  displayOrder Int
+  coach        Coach     @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  bookings     Booking[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([coachId, seatNumber])
+  @@index([coachId])
+}
+
+model Booking {
+  id                        String  @id @default(cuid())
+  bookingReference          String  @unique
+  passengerName             String
+  passengerEmail            String?
+  journeyId                 String
+  seatId                    String
+  originRouteStationId      String
+  destinationRouteStationId String
+
+  originOrder      Int
+  destinationOrder Int
+
+  distanceKm Decimal       @db.Decimal(10, 2)
+  fare       Decimal       @db.Decimal(10, 2)
+  status     BookingStatus @default(CONFIRMED)
+
+  journey                 Journey      @relation(fields: [journeyId], references: [id])
+  seat                    Seat         @relation(fields: [seatId], references: [id])
+  originRouteStation      RouteStation @relation("OriginStation", fields: [originRouteStationId], references: [id])
+  destinationRouteStation RouteStation @relation("DestinationStation", fields: [destinationRouteStationId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([journeyId, seatId, status])
+  @@index([journeyId, originOrder, destinationOrder])
+}
