@@ -171,3 +171,72 @@ export interface ApiErrorResponse {
     details?: unknown;
   };
 }
+
+export interface AdminSummary {
+  confirmedBookingCount: number;
+  cancelledBookingCount: number;
+  totalRevenue: number;
+  currency: "LKR";
+  journeyCount: number;
+}
+
+export interface CoachOccupancy {
+  coachId: string;
+  code: string;
+  name: string;
+  displayOrder: number;
+  totalSeats: number;
+  occupiedSeats: number;
+  availableSeats: number;
+  occupancyPercentage: number;
+}
+
+export interface JourneyAnalytics {
+  journey: {
+    id: string;
+    trainNumber: string;
+    departureTime: string;
+  };
+
+  segment: {
+    origin: RouteStation;
+    destination: RouteStation;
+  };
+
+  summary: {
+    totalReservedSeats: number;
+    occupiedSeats: number;
+    availableSeats: number;
+    occupancyPercentage: number;
+  };
+
+  coaches: CoachOccupancy[];
+}
+
+export interface AdminBooking {
+  id: string;
+  bookingReference: string;
+  passengerName: string;
+  passengerEmail: string | null;
+  status: "CONFIRMED" | "CANCELLED";
+  fare: number;
+  createdAt: string;
+
+  journey: {
+    id: string;
+    trainNumber: string;
+    departureTime: string;
+    routeName: string;
+  };
+
+  seat: {
+    id: string;
+    seatNumber: string;
+    coachCode: string;
+  };
+
+  segment: {
+    origin: string;
+    destination: string;
+  };
+}

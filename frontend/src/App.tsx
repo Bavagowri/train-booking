@@ -1,8 +1,16 @@
+import {
+  Route,
+  Routes,
+} from "react-router-dom";
+
 import "./App.css";
 
+import { ProtectedAdminRoute } from "./components/ProtectedAdminRoute";
+import { AdminDashboardPage } from "./pages/AdminDashboardPage";
+import { AdminLoginPage } from "./pages/AdminLoginPage";
 import { BookingPage } from "./pages/BookingPage";
 
-function App() {
+function PassengerBookingLayout() {
   return (
     <div className="app">
       <header className="app-header">
@@ -27,6 +35,29 @@ function App() {
         <BookingPage />
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={<PassengerBookingLayout />}
+      />
+
+      <Route
+        path="/admin/login"
+        element={<AdminLoginPage />}
+      />
+
+      <Route element={<ProtectedAdminRoute />}>
+        <Route
+          path="/admin"
+          element={<AdminDashboardPage />}
+        />
+      </Route>
+    </Routes>
   );
 }
 

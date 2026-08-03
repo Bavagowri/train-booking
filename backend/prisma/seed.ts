@@ -1,7 +1,10 @@
 import "dotenv/config";
 
 import { PrismaPg } from "@prisma/adapter-pg";
+import bcrypt from "bcryptjs";
+
 import {
+  AdminRole,
   CoachType,
   PrismaClient,
 } from "@prisma/client";
@@ -60,6 +63,7 @@ async function main(): Promise<void> {
   await prisma.seat.deleteMany();
   await prisma.coach.deleteMany();
   await prisma.station.deleteMany();
+  await prisma.admin.deleteMany();
 
   /* -----------------------------
       Stations
@@ -257,6 +261,52 @@ async function main(): Promise<void> {
   console.log(
     `✅ ${createdCoaches.length} coaches assigned to train ${journey.trainNumber}`,
   );
+
+  /* -----------------------------
+   Development Admin
+-------------------------------- */
+
+const adminName =
+  process.env.SEED_ADMIN_NAME ??
+  "System Administrator";
+
+const adminEmail =
+  process.env.SEED_ADMIN_EMAIL ??
+  "admin@trainbooking.lk";
+
+const adminPassword =
+  process.env.SEED_ADMIN_PASSWORD;
+
+if (!adminPassword) {
+  throw new Error(
+    "SEED_ADMIN_PASSWORD is required to seed the admin account.",
+  );
+}
+
+if (bcrypt.truncates(adminPassword)) {
+  throw new Error(
+    "SEED_ADMIN_PASSWORD exceeds bcrypt's 72-byte limit.",
+  );
+}
+
+const passwordHash = await bcrypt.hash(
+  adminPassword,
+  12,
+);
+
+await prisma.admin.create({
+  data: {
+    name: adminName,
+    email: adminEmail.trim().toLowerCase(),
+    passwordHash,
+    role: AdminRole.SUPER_ADMIN,
+    isActive: true,
+  },
+});
+
+console.log(
+  `✅ Development admin created: ${adminEmail}`,
+);
 
   console.log(
     "Database seeded successfully",

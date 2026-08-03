@@ -3,6 +3,9 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { journeyRouter } from "./journey.routes.js";
 import { bookingRouter } from "./booking.routes.js";
+import { adminRouter } from "./admin.routes.js";
+import { adminAuthRouter } from "./adminAuth.routes.js";
+import { requireAdminAuth } from "../middleware/requireAdminAuth.js";
 
 export const apiRouter = Router();
 
@@ -35,3 +38,13 @@ apiRouter.get("/health", async (_req, res) => {
 
 apiRouter.use("/journeys", journeyRouter);
 apiRouter.use("/bookings", bookingRouter);
+apiRouter.use("/admin", adminRouter);
+apiRouter.use(
+  "/admin/auth",
+  adminAuthRouter,
+);
+apiRouter.use(
+  "/admin",
+  requireAdminAuth,
+  adminRouter,
+);
