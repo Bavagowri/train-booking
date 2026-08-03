@@ -12,7 +12,7 @@ import {
 import { BookingConfirmation } from "../components/BookingConfirmation";
 import { JourneySelector } from "../components/JourneySelector";
 import { PassengerForm } from "../components/PassengerForm";
-import { SeatGrid } from "../components/SeatGrid";
+import { CoachSeatMap } from "../components/CoachSeatMap";
 import { SegmentSelector } from "../components/SegmentSelector";
 
 import type {
@@ -478,16 +478,16 @@ export function BookingPage() {
             />
             ) : null}
 
-            <SeatGrid
-            availability={availability}
-            selectedSeatId={
-                selectedSeat?.seat.id ?? ""
-            }
-            isLoading={isLoadingAvailability}
-            errorMessage={
-                availabilityError || undefined
-            }
-            onSeatSelect={handleSeatSelect}
+            <CoachSeatMap
+                availability={availability}
+                selectedSeatId={
+                    selectedSeat?.seat.id ?? ""
+                }
+                isLoading={isLoadingAvailability}
+                errorMessage={
+                    availabilityError || undefined
+                }
+                onSeatSelect={handleSeatSelect}
             />
 
             {availability ? (
