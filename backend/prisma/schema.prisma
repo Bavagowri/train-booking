@@ -53,27 +53,47 @@ model RouteStation {
 }
 
 model Journey {
-  id            String    @id @default(cuid())
-  routeId       String
-  trainNumber   String
-  departureTime DateTime
-  route         Route     @relation(fields: [routeId], references: [id])
-  bookings      Booking[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String         @id @default(cuid())
+  routeId        String
+  trainNumber    String
+  departureTime  DateTime
+  route          Route          @relation(fields: [routeId], references: [id])
+  bookings       Booking[]
+  journeyCoaches JourneyCoach[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   @@index([routeId, departureTime])
 }
 
 model Coach {
-  id           String    @id @default(cuid())
-  code         String    @unique
-  name         String
-  type         CoachType
+  id             String         @id @default(cuid())
+  code           String         @unique
+  name           String
+  type           CoachType
+  displayOrder   Int
+  seats          Seat[]
+  journeyCoaches JourneyCoach[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model JourneyCoach {
+  id           String @id @default(cuid())
+  journeyId    String
+  coachId      String
   displayOrder Int
-  seats        Seat[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+
+  journey Journey @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  coach   Coach   @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([journeyId, coachId])
+  @@unique([journeyId, displayOrder])
+  @@index([journeyId])
+  @@index([coachId])
 }
 
 model Seat {

@@ -60,6 +60,10 @@ export class BookingService {
   async createBooking(
     input: CreateBookingInput,
   ) {
+    /*
+     * Validate that the journey exists and that both
+     * stations belong to the journey's route.
+     */
     const segment =
       await segmentService.validateSegment(
         input.journeyId,
@@ -67,19 +71,27 @@ export class BookingService {
         input.destinationStationId,
       );
 
+    /*
+     * Fare is always calculated by the backend.
+     */
     const fareResult =
       fareService.calculateFare({
         originDistanceKm:
           segment.origin.distanceFromStartKm,
 
         destinationDistanceKm:
-          segment.destination
-            .distanceFromStartKm,
+          segment.destination.distanceFromStartKm,
       });
 
     const booking: BookingWithDetails =
       await prisma.$transaction(
         async (transaction) => {
+          /*
+           * Lock the physical seat row.
+           *
+           * Concurrent requests trying to book this seat
+           * must wait until the current transaction completes.
+           */
           const lockedSeats =
             await transaction.$queryRaw<
               Array<{ id: string }>
@@ -98,10 +110,30 @@ export class BookingService {
             );
           }
 
+          /*
+           * Confirm that:
+           *
+           * 1. The seat exists.
+           * 2. Its coach is RESERVED.
+           * 3. The coach is assigned to this journey.
+           */
           const seat =
-            await transaction.seat.findUnique({
+            await transaction.seat.findFirst({
               where: {
                 id: input.seatId,
+
+                coach: {
+                  is: {
+                    type: CoachType.RESERVED,
+
+                    journeyCoaches: {
+                      some: {
+                        journeyId:
+                          input.journeyId,
+                      },
+                    },
+                  },
+                },
               },
 
               include: {
@@ -111,23 +143,20 @@ export class BookingService {
 
           if (!seat) {
             throw new AppError(
-              404,
-              "SEAT_NOT_FOUND",
-              "The selected seat was not found.",
-            );
-          }
-
-          if (
-            seat.coach.type !==
-            CoachType.RESERVED
-          ) {
-            throw new AppError(
               400,
-              "SEAT_NOT_RESERVABLE",
-              "Seats can only be booked in reserved coaches.",
+              "SEAT_NOT_ASSIGNED_TO_JOURNEY",
+              "The selected seat does not belong to a reserved coach assigned to this journey.",
             );
           }
 
+          /*
+           * Recheck availability after obtaining the lock.
+           *
+           * Overlap:
+           * existingOrigin < requestedDestination
+           * AND
+           * existingDestination > requestedOrigin
+           */
           const conflictingBooking =
             await transaction.booking.findFirst({
               where: {
@@ -171,7 +200,8 @@ export class BookingService {
               passengerName:
                 input.passengerName.trim(),
 
-              passengerEmail: input.passengerEmail ?? null,
+              passengerEmail:
+                input.passengerEmail ?? null,
 
               journeyId: input.journeyId,
               seatId: input.seatId,
@@ -255,8 +285,7 @@ export class BookingService {
 
         route: {
           id: booking.journey.route.id,
-          name:
-            booking.journey.route.name,
+          name: booking.journey.route.name,
         },
       },
 
