@@ -1,0 +1,225 @@
+.booking-confirmation-card {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px;
+  border: 1px solid #dce6ef;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow:
+    0 22px 60px rgba(30, 55, 85, 0.1),
+    0 5px 16px rgba(30, 55, 85, 0.04);
+  text-align: center;
+}
+
+.booking-confirmation-icon {
+  display: grid;
+  width: 70px;
+  height: 70px;
+  margin: 0 auto 18px;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    linear-gradient(
+      145deg,
+      #e4f8ed,
+      #c9efd9
+    );
+  color: #117349;
+  box-shadow:
+    0 12px 25px
+    rgba(17, 115, 73, 0.15);
+  font-size: 35px;
+  font-weight: 900;
+}
+
+.booking-confirmation-eyebrow {
+  margin: 0 0 7px;
+  color: #16764b;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.booking-confirmation-card h2 {
+  margin: 0;
+  color: #102a43;
+  font-size: 33px;
+  letter-spacing: -0.035em;
+}
+
+.booking-confirmation-message {
+  margin: 11px 0 0;
+  color: #68798c;
+}
+
+.booking-confirmation-reference {
+  margin: 26px 0;
+  padding: 20px;
+  border: 1px solid #d3e6f5;
+  border-radius: 17px;
+  background:
+    linear-gradient(
+      145deg,
+      #f3f9fe,
+      #e8f3fb
+    );
+}
+
+.booking-confirmation-reference span {
+  display: block;
+  margin-bottom: 6px;
+  color: #6d8194;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.booking-confirmation-reference strong {
+  color: #0f4c81;
+  font-size: 25px;
+  letter-spacing: 0.05em;
+}
+
+.booking-confirmation-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  text-align: left;
+}
+
+.booking-confirmation-grid > div {
+  padding: 16px;
+  border: 1px solid #e0e8ef;
+  border-radius: 14px;
+  background: #fbfdff;
+}
+
+.booking-confirmation-grid span {
+  display: block;
+  margin-bottom: 5px;
+  color: #748397;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.booking-confirmation-grid strong {
+  color: #263e56;
+  overflow-wrap: anywhere;
+}
+
+.confirmation-fare-breakdown {
+  margin-top: 23px;
+  padding: 20px;
+  border: 1px solid #dce7ef;
+  border-radius: 16px;
+  background: #f8fbfd;
+  text-align: left;
+}
+
+.confirmation-fare-heading {
+  margin-bottom: 10px;
+}
+
+.confirmation-fare-heading span,
+.confirmation-fare-heading strong {
+  display: block;
+}
+
+.confirmation-fare-heading span {
+  color: #1b70aa;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.confirmation-fare-heading strong {
+  margin-top: 4px;
+  color: #29465f;
+}
+
+.confirmation-fare-breakdown dl {
+  margin: 0;
+}
+
+.confirmation-fare-breakdown dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e4ebf1;
+}
+
+.confirmation-fare-breakdown dt {
+  color: #68798c;
+}
+
+.confirmation-fare-breakdown dd {
+  margin: 0;
+  color: #294159;
+  font-weight: 800;
+}
+
+.confirmation-discount-row dd {
+  color: #13784c;
+}
+
+.confirmation-fare-breakdown
+  .confirmation-fare-total {
+  padding-top: 14px;
+  border-bottom: 0;
+}
+
+.confirmation-fare-total dt,
+.confirmation-fare-total dd {
+  color: #113b5c;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.booking-confirmation-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 27px;
+}
+
+.booking-confirmation-actions button {
+  min-height: 50px;
+  padding: 12px 22px;
+  border: 0;
+  border-radius: 13px;
+  background:
+    linear-gradient(
+      135deg,
+      #1d83ca,
+      #0e4c7d
+    );
+  color: #ffffff;
+  box-shadow:
+    0 11px 24px
+    rgba(14, 76, 125, 0.23);
+  font-weight: 800;
+}
+
+@media (max-width: 700px) {
+  .booking-confirmation-card {
+    padding: 25px 19px;
+  }
+
+  .booking-confirmation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .booking-confirmation-reference strong {
+    font-size: 19px;
+  }
+
+  .booking-confirmation-actions button {
+    width: 100%;
+  }
+}

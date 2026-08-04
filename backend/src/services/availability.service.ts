@@ -20,49 +20,66 @@ export class AvailabilityService {
         destinationRouteStationId,
       );
 
-    const fare = fareService.calculateFare({
+    const fare = await fareService.calculateFare({
       originDistanceKm:
         segment.origin.distanceFromStartKm,
+
       destinationDistanceKm:
         segment.destination.distanceFromStartKm,
+
+      journeyDepartureTime:
+        segment.journey.departureTime,
     });
 
-    const [reservedCoaches, conflictingBookings] =
-      await Promise.all([
-        prisma.coach.findMany({
-          where: {
+    const [
+      journeyCoachAssignments,
+      conflictingBookings,
+    ] = await Promise.all([
+      prisma.journeyCoach.findMany({
+        where: {
+          journeyId,
+
+          coach: {
             type: CoachType.RESERVED,
           },
-          orderBy: {
-            displayOrder: "asc",
-          },
-          include: {
-            seats: {
-              orderBy: {
-                displayOrder: "asc",
+        },
+
+        orderBy: {
+          displayOrder: "asc",
+        },
+
+        include: {
+          coach: {
+            include: {
+              seats: {
+                orderBy: {
+                  displayOrder: "asc",
+                },
               },
             },
           },
-        }),
+        },
+      }),
 
-        prisma.booking.findMany({
-          where: {
-            journeyId,
-            status: BookingStatus.CONFIRMED,
+      prisma.booking.findMany({
+        where: {
+          journeyId,
+          status: BookingStatus.CONFIRMED,
 
-            originOrder: {
-              lt: segment.destination.stopOrder,
-            },
-
-            destinationOrder: {
-              gt: segment.origin.stopOrder,
-            },
+          originOrder: {
+            lt: segment.destination.stopOrder,
           },
-          select: {
-            seatId: true,
+
+          destinationOrder: {
+            gt: segment.origin.stopOrder,
           },
-        }),
-      ]);
+        },
+
+        select: {
+          seatId: true,
+        },
+      }),
+    ]);
 
     const unavailableSeatIds = new Set(
       conflictingBookings.map(
@@ -70,63 +87,90 @@ export class AvailabilityService {
       ),
     );
 
-    const coaches = reservedCoaches.map((coach) => {
-      const seats = coach.seats.map((seat) => ({
-        id: seat.id,
-        seatNumber: seat.seatNumber,
-        displayOrder: seat.displayOrder,
-        available: !unavailableSeatIds.has(
-          seat.id,
-        ),
-      }));
+    const coaches =
+      journeyCoachAssignments.map(
+        (assignment) => {
+          const coach = assignment.coach;
 
-      const availableSeatCount = seats.filter(
-        (seat) => seat.available,
-      ).length;
+          const seats = coach.seats.map(
+            (seat) => ({
+              id: seat.id,
+              seatNumber: seat.seatNumber,
+              displayOrder:
+                seat.displayOrder,
 
-      return {
-        id: coach.id,
-        code: coach.code,
-        name: coach.name,
-        displayOrder: coach.displayOrder,
-        totalSeatCount: seats.length,
-        availableSeatCount,
-        seats,
-      };
-    });
+              available:
+                !unavailableSeatIds.has(
+                  seat.id,
+                ),
+            }),
+          );
 
-    const totalSeatCount = coaches.reduce(
-      (total, coach) =>
-        total + coach.totalSeatCount,
-      0,
-    );
+          const availableSeatCount =
+            seats.filter(
+              (seat) => seat.available,
+            ).length;
 
-    const availableSeatCount = coaches.reduce(
-      (total, coach) =>
-        total + coach.availableSeatCount,
-      0,
-    );
+          return {
+            id: coach.id,
+            code: coach.code,
+            name: coach.name,
+
+            displayOrder:
+              assignment.displayOrder,
+
+            totalSeatCount:
+              seats.length,
+
+            availableSeatCount,
+
+            seats,
+          };
+        },
+      );
+
+    const totalSeatCount =
+      coaches.reduce(
+        (total, coach) =>
+          total +
+          coach.totalSeatCount,
+        0,
+      );
+
+    const availableSeatCount =
+      coaches.reduce(
+        (total, coach) =>
+          total +
+          coach.availableSeatCount,
+        0,
+      );
 
     return {
       journey: {
         id: segment.journey.id,
+
         trainNumber:
           segment.journey.trainNumber,
+
         departureTime:
           segment.journey.departureTime,
       },
 
       segment: {
         origin: segment.origin,
-        destination: segment.destination,
+        destination:
+          segment.destination,
+
         ...fare,
       },
 
       availability: {
         totalSeatCount,
         availableSeatCount,
+
         unavailableSeatCount:
-          totalSeatCount - availableSeatCount,
+          totalSeatCount -
+          availableSeatCount,
       },
 
       coaches,

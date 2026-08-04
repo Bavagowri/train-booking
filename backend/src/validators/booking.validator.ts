@@ -1,3 +1,4 @@
+import { PassengerCategory } from "@prisma/client";
 import { z } from "zod";
 
 export const createBookingSchema = z.object({
@@ -24,16 +25,27 @@ export const createBookingSchema = z.object({
   passengerName: z
     .string()
     .trim()
-    .min(2, "Passenger name must contain at least 2 characters.")
-    .max(100, "Passenger name cannot exceed 100 characters."),
+    .min(
+      2,
+      "Passenger name must contain at least 2 characters.",
+    )
+    .max(
+      100,
+      "Passenger name cannot exceed 100 characters.",
+    ),
 
   passengerEmail: z
     .union([
       z
         .string()
         .trim()
-        .email("Passenger email must be valid.")
-        .max(255),
+        .email(
+          "Passenger email must be valid.",
+        )
+        .max(
+          255,
+          "Passenger email cannot exceed 255 characters.",
+        ),
       z.literal(""),
     ])
     .optional()
@@ -42,6 +54,10 @@ export const createBookingSchema = z.object({
         ? value.toLowerCase()
         : undefined,
     ),
+
+  passengerCategory: z
+    .nativeEnum(PassengerCategory)
+    .default(PassengerCategory.ADULT),
 });
 
 export type CreateBookingInput = z.infer<
