@@ -1,26 +1,32 @@
 import axios from "axios";
-import { useEffect, useMemo, useState } from "react";
-
 import {
-  createBooking,
-} from "../api/booking.api";
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import { createBooking } from "../api/booking.api";
+
 import {
   getJourneyById,
   getJourneys,
   getSeatAvailability,
 } from "../api/journey.api";
+
 import { BookingConfirmation } from "../components/BookingConfirmation";
+import { CoachSeatMap } from "../components/CoachSeatMap";
 import { JourneySelector } from "../components/JourneySelector";
 import { PassengerForm } from "../components/PassengerForm";
-import { CoachSeatMap } from "../components/CoachSeatMap";
 import { SegmentSelector } from "../components/SegmentSelector";
 
 import type {
   ApiErrorResponse,
   Booking,
   CoachAvailability,
+  FareBreakdown,
   JourneyDetails,
   JourneySummary,
+  PassengerCategory,
   Seat,
   SeatAvailability,
 } from "../types";
@@ -30,11 +36,25 @@ interface SelectedSeat {
   coach: CoachAvailability;
 }
 
+const categoryDiscountPercentages: Record<
+  PassengerCategory,
+  number
+> = {
+  ADULT: 0,
+  CHILD: 50,
+  SENIOR: 20,
+  STUDENT: 10,
+};
+
 function getApiErrorMessage(
   error: unknown,
   fallbackMessage: string,
 ): string {
-  if (axios.isAxiosError<ApiErrorResponse>(error)) {
+  if (
+    axios.isAxiosError<ApiErrorResponse>(
+      error,
+    )
+  ) {
     return (
       error.response?.data?.error?.message ??
       fallbackMessage
@@ -48,42 +68,123 @@ function getApiErrorMessage(
   return fallbackMessage;
 }
 
+function calculateFarePreview(
+  availability: SeatAvailability,
+  category: PassengerCategory,
+): {
+  fare: number;
+  breakdown: FareBreakdown;
+} {
+  const segment = availability.segment;
+
+  const subtotal =
+    segment.subtotal ??
+    segment.baseFare +
+      segment.distanceCharge +
+      segment.reservedSurcharge +
+      segment.peakSurcharge;
+
+  const discountPercentage =
+    categoryDiscountPercentages[category];
+
+  const passengerDiscount =
+    Math.round(
+      subtotal *
+        (discountPercentage / 100),
+    );
+
+  const fare = Math.max(
+    segment.minimumFare,
+    Math.ceil(
+      subtotal - passengerDiscount,
+    ),
+  );
+
+  return {
+    fare,
+
+    breakdown: {
+      baseFare: segment.baseFare,
+      distanceCharge:
+        segment.distanceCharge,
+      reservedSurcharge:
+        segment.reservedSurcharge,
+      peakSurcharge:
+        segment.peakSurcharge,
+      passengerDiscount,
+      minimumFare: segment.minimumFare,
+      subtotal,
+      isPeak: segment.isPeak,
+      bands: segment.bands,
+    },
+  };
+}
+
 export function BookingPage() {
-  const [journeys, setJourneys] = useState<
-    JourneySummary[]
-  >([]);
+  const [journeys, setJourneys] =
+    useState<JourneySummary[]>([]);
 
-  const [selectedJourneyId, setSelectedJourneyId] =
-    useState("");
+  const [
+    selectedJourneyId,
+    setSelectedJourneyId,
+  ] = useState("");
 
-  const [journeyDetails, setJourneyDetails] =
-    useState<JourneyDetails | null>(null);
+  const [
+    journeyDetails,
+    setJourneyDetails,
+  ] = useState<JourneyDetails | null>(
+    null,
+  );
 
-  const [originStationId, setOriginStationId] =
-    useState("");
+  const [
+    originStationId,
+    setOriginStationId,
+  ] = useState("");
 
   const [
     destinationStationId,
     setDestinationStationId,
   ] = useState("");
 
-  const [availability, setAvailability] =
-    useState<SeatAvailability | null>(null);
+  const [
+    availability,
+    setAvailability,
+  ] = useState<SeatAvailability | null>(
+    null,
+  );
 
-  const [selectedSeat, setSelectedSeat] =
-    useState<SelectedSeat | null>(null);
+  const [
+    selectedSeat,
+    setSelectedSeat,
+  ] = useState<SelectedSeat | null>(
+    null,
+  );
 
-  const [passengerName, setPassengerName] =
-    useState("");
+  const [
+    passengerName,
+    setPassengerName,
+  ] = useState("");
 
-  const [passengerEmail, setPassengerEmail] =
-    useState("");
+  const [
+    passengerEmail,
+    setPassengerEmail,
+  ] = useState("");
 
-  const [confirmedBooking, setConfirmedBooking] =
-    useState<Booking | null>(null);
+  const [
+    passengerCategory,
+    setPassengerCategory,
+  ] =
+    useState<PassengerCategory>("ADULT");
 
-  const [isLoadingJourneys, setIsLoadingJourneys] =
-    useState(true);
+  const [
+    confirmedBooking,
+    setConfirmedBooking,
+  ] = useState<Booking | null>(null);
+
+  const [
+    isLoadingJourneys,
+    setIsLoadingJourneys,
+  ] = useState(true);
 
   const [
     isLoadingJourneyDetails,
@@ -95,17 +196,25 @@ export function BookingPage() {
     setIsLoadingAvailability,
   ] = useState(false);
 
-  const [isSubmittingBooking, setIsSubmittingBooking] =
-    useState(false);
+  const [
+    isSubmittingBooking,
+    setIsSubmittingBooking,
+  ] = useState(false);
 
-  const [journeyError, setJourneyError] =
-    useState("");
+  const [
+    journeyError,
+    setJourneyError,
+  ] = useState("");
 
-  const [availabilityError, setAvailabilityError] =
-    useState("");
+  const [
+    availabilityError,
+    setAvailabilityError,
+  ] = useState("");
 
-  const [bookingError, setBookingError] =
-    useState("");
+  const [
+    bookingError,
+    setBookingError,
+  ] = useState("");
 
   useEffect(() => {
     async function loadJourneys() {
@@ -113,15 +222,19 @@ export function BookingPage() {
       setJourneyError("");
 
       try {
-        const response = await getJourneys();
+        const response =
+          await getJourneys();
 
         setJourneys(response.data);
 
         if (response.data.length === 1) {
-          const [journey] = response.data;
+          const journey =
+            response.data[0];
 
           if (journey) {
-            setSelectedJourneyId(journey.id);
+            setSelectedJourneyId(
+              journey.id,
+            );
           }
         }
       } catch (error: unknown) {
@@ -155,6 +268,7 @@ export function BookingPage() {
       setAvailability(null);
       setSelectedSeat(null);
       setConfirmedBooking(null);
+
       setBookingError("");
       setAvailabilityError("");
 
@@ -180,13 +294,28 @@ export function BookingPage() {
     void loadJourneyDetails();
   }, [selectedJourneyId]);
 
-  const selectedSeatLabel = useMemo(() => {
-    if (!selectedSeat) {
-      return undefined;
+  const selectedSeatLabel =
+    useMemo(() => {
+      if (!selectedSeat) {
+        return undefined;
+      }
+
+      return `Coach ${selectedSeat.coach.code} · Seat ${selectedSeat.seat.seatNumber}`;
+    }, [selectedSeat]);
+
+  const farePreview = useMemo(() => {
+    if (!availability) {
+      return null;
     }
 
-    return `Coach ${selectedSeat.coach.code} · Seat ${selectedSeat.seat.seatNumber}`;
-  }, [selectedSeat]);
+    return calculateFarePreview(
+      availability,
+      passengerCategory,
+    );
+  }, [
+    availability,
+    passengerCategory,
+  ]);
 
   const canSubmitBooking =
     selectedJourneyId !== "" &&
@@ -196,7 +325,7 @@ export function BookingPage() {
     passengerName.trim().length >= 2 &&
     !isSubmittingBooking;
 
-  function resetSelectionAfterSegmentChange() {
+  function resetSegmentSelection() {
     setAvailability(null);
     setSelectedSeat(null);
     setBookingError("");
@@ -215,7 +344,7 @@ export function BookingPage() {
     setOriginStationId(stationId);
     setDestinationStationId("");
 
-    resetSelectionAfterSegmentChange();
+    resetSegmentSelection();
   }
 
   function handleDestinationChange(
@@ -223,7 +352,7 @@ export function BookingPage() {
   ) {
     setDestinationStationId(stationId);
 
-    resetSelectionAfterSegmentChange();
+    resetSegmentSelection();
   }
 
   async function loadAvailability() {
@@ -245,6 +374,7 @@ export function BookingPage() {
         await getSeatAvailability({
           journeyId:
             selectedJourneyId,
+
           originStationId,
           destinationStationId,
         });
@@ -299,11 +429,12 @@ export function BookingPage() {
             selectedSeat.seat.id,
 
           originStationId,
-
           destinationStationId,
 
           passengerName:
             passengerName.trim(),
+
+          passengerCategory,
 
           ...(passengerEmail.trim()
             ? {
@@ -330,7 +461,8 @@ export function BookingPage() {
 
         if (
           error.response?.status === 409 ||
-          errorCode === "SEAT_UNAVAILABLE"
+          errorCode ===
+            "SEAT_UNAVAILABLE"
         ) {
           setBookingError(
             "This seat was just booked by another passenger. Please choose another available seat.",
@@ -362,6 +494,7 @@ export function BookingPage() {
 
     setPassengerName("");
     setPassengerEmail("");
+    setPassengerCategory("ADULT");
 
     setBookingError("");
     setAvailabilityError("");
@@ -380,219 +513,268 @@ export function BookingPage() {
 
   return (
     <div className="booking-page">
-        <section className="booking-hero">
+      <section className="booking-hero">
         <div className="booking-hero-overlay" />
 
         <div className="booking-hero-content">
-            <div className="hero-route-badge">
+          <div className="hero-route-badge">
             Colombo Fort → Badulla
-            </div>
+          </div>
 
-            <p className="hero-eyebrow">
+          <p className="hero-eyebrow">
             Sri Lanka Railway Reservations
-            </p>
+          </p>
 
-            <h1>
+          <h1>
             Book only the distance you travel
-            </h1>
+          </h1>
 
-            <p className="hero-description">
-            Reserve a seat for your selected segment and
-            allow the same seat to be reused safely after
-            you leave the train.
-            </p>
+          <p className="hero-description">
+            Reserve a seat for your selected
+            segment and allow the same seat to
+            be reused after you leave the train.
+          </p>
 
-            <div className="hero-features">
+          <div className="hero-features">
             <div>
-                <strong>120</strong>
-                <span>Reserved seats</span>
-            </div>
-
-            <div>
-                <strong>8</strong>
-                <span>Total coaches</span>
-                </div>
-
-                <div>
-                <strong>3</strong>
-                <span>Reserved coaches</span>
-                </div>
-
-                <div>
-                <strong>5</strong>
-                <span>Unreserved coaches</span>
+              <strong>120</strong>
+              <span>Reserved seats</span>
             </div>
 
             <div>
-                <strong>10</strong>
-                <span>Route stations</span>
-            </div>
+              <strong>3</strong>
+              <span>Reserved coaches</span>
             </div>
 
-            <a
+            <div>
+              <strong>5</strong>
+              <span>Unreserved coaches</span>
+            </div>
+
+            <div>
+              <strong>10</strong>
+              <span>Route stations</span>
+            </div>
+          </div>
+
+          <a
             className="hero-action"
             href="#journey-search"
-            >
+          >
             Start your booking
-            </a>
+          </a>
         </div>
-        </section>
+      </section>
 
-        <div
+      <div
         id="journey-search"
         className="booking-layout"
-        >
+      >
         <div className="booking-content">
-            <JourneySelector
+          <JourneySelector
             journeys={journeys}
-            selectedJourneyId={selectedJourneyId}
-            isLoading={isLoadingJourneys}
-            errorMessage={journeyError || undefined}
-            onChange={handleJourneyChange}
-            />
+            selectedJourneyId={
+              selectedJourneyId
+            }
+            isLoading={
+              isLoadingJourneys
+            }
+            errorMessage={
+              journeyError || undefined
+            }
+            onChange={
+              handleJourneyChange
+            }
+          />
 
-            {selectedJourneyId ? (
+          {selectedJourneyId ? (
             <SegmentSelector
-                stations={
-                journeyDetails?.route.stations ?? []
-                }
-                originStationId={originStationId}
-                destinationStationId={
+              stations={
+                journeyDetails?.route
+                  .stations ?? []
+              }
+              originStationId={
+                originStationId
+              }
+              destinationStationId={
                 destinationStationId
-                }
-                isLoading={
+              }
+              isLoading={
                 isLoadingJourneyDetails
-                }
-                isSearching={
+              }
+              isSearching={
                 isLoadingAvailability
-                }
-                onOriginChange={
+              }
+              onOriginChange={
                 handleOriginChange
-                }
-                onDestinationChange={
+              }
+              onDestinationChange={
                 handleDestinationChange
-                }
-                onSearch={() => {
+              }
+              onSearch={() => {
                 void loadAvailability();
-                }}
+              }}
             />
-            ) : null}
+          ) : null}
 
-            <CoachSeatMap
-                availability={availability}
-                selectedSeatId={
-                    selectedSeat?.seat.id ?? ""
-                }
-                isLoading={isLoadingAvailability}
-                errorMessage={
-                    availabilityError || undefined
-                }
-                onSeatSelect={handleSeatSelect}
-            />
+          <CoachSeatMap
+            availability={availability}
+            selectedSeatId={
+              selectedSeat?.seat.id ?? ""
+            }
+            isLoading={
+              isLoadingAvailability
+            }
+            errorMessage={
+              availabilityError ||
+              undefined
+            }
+            onSeatSelect={
+              handleSeatSelect
+            }
+          />
 
-            {availability ? (
+          {availability ? (
             <PassengerForm
-                passengerName={passengerName}
-                passengerEmail={passengerEmail}
-                selectedSeatLabel={
+              passengerName={
+                passengerName
+              }
+              passengerEmail={
+                passengerEmail
+              }
+              passengerCategory={
+                passengerCategory
+              }
+              selectedSeatLabel={
                 selectedSeatLabel
-                }
-                fare={availability.segment.fare}
-                isSubmitting={
+              }
+              fare={
+                farePreview?.fare
+              }
+              fareBreakdown={
+                farePreview?.breakdown
+              }
+              isSubmitting={
                 isSubmittingBooking
-                }
-                errorMessage={
+              }
+              errorMessage={
                 bookingError || undefined
-                }
-                canSubmit={canSubmitBooking}
-                onPassengerNameChange={
+              }
+              canSubmit={
+                canSubmitBooking
+              }
+              onPassengerNameChange={
                 setPassengerName
-                }
-                onPassengerEmailChange={
+              }
+              onPassengerEmailChange={
                 setPassengerEmail
-                }
-                onSubmit={() => {
+              }
+              onPassengerCategoryChange={
+                setPassengerCategory
+              }
+              onSubmit={() => {
                 void handleBookingSubmit();
-                }}
+              }}
             />
-            ) : null}
+          ) : null}
         </div>
 
         <aside className="booking-sidebar">
-            <div className="booking-card sticky-summary">
+          <div className="booking-card sticky-summary">
             <p className="section-eyebrow">
-                Booking summary
+              Booking summary
             </p>
 
             <h3>Your selected journey</h3>
 
             <dl className="summary-list">
-                <div>
+              <div>
                 <dt>Train</dt>
+
                 <dd>
-                    {journeyDetails
-                    ? journeyDetails.trainNumber
+                  {journeyDetails
+                    ? journeyDetails
+                        .trainNumber
                     : "Not selected"}
                 </dd>
-                </div>
+              </div>
 
-                <div>
+              <div>
                 <dt>Origin</dt>
-                <dd>
-                    {journeyDetails?.route.stations.find(
-                    (station) =>
-                        station.id === originStationId,
-                    )?.name ?? "Not selected"}
-                </dd>
-                </div>
 
-                <div>
-                <dt>Destination</dt>
                 <dd>
-                    {journeyDetails?.route.stations.find(
-                    (station) =>
+                  {journeyDetails?.route
+                    .stations.find(
+                      (station) =>
                         station.id ===
-                        destinationStationId,
-                    )?.name ?? "Not selected"}
-                </dd>
-                </div>
-
-                <div>
-                <dt>Seat</dt>
-                <dd>
-                    {selectedSeatLabel ??
+                        originStationId,
+                    )?.name ??
                     "Not selected"}
                 </dd>
-                </div>
+              </div>
 
-                <div>
-                <dt>Distance</dt>
+              <div>
+                <dt>Destination</dt>
+
                 <dd>
-                    {availability
+                  {journeyDetails?.route
+                    .stations.find(
+                      (station) =>
+                        station.id ===
+                        destinationStationId,
+                    )?.name ??
+                    "Not selected"}
+                </dd>
+              </div>
+
+              <div>
+                <dt>Passenger type</dt>
+
+                <dd>
+                  {passengerCategory}
+                </dd>
+              </div>
+
+              <div>
+                <dt>Seat</dt>
+
+                <dd>
+                  {selectedSeatLabel ??
+                    "Not selected"}
+                </dd>
+              </div>
+
+              <div>
+                <dt>Distance</dt>
+
+                <dd>
+                  {availability
                     ? `${availability.segment.distanceKm} km`
                     : "—"}
                 </dd>
-                </div>
+              </div>
 
-                <div>
-                <dt>Fare</dt>
+              <div>
+                <dt>Estimated fare</dt>
+
                 <dd>
-                    {availability
-                    ? `LKR ${availability.segment.fare.toLocaleString(
+                  {farePreview
+                    ? `LKR ${farePreview.fare.toLocaleString(
                         "en-LK",
-                        )}`
+                      )}`
                     : "—"}
                 </dd>
-                </div>
+              </div>
             </dl>
 
             <div className="summary-note">
-                Fare and seat availability are calculated
-                only for your selected travel segment.
+              The final fare is calculated and
+              verified by the backend when the
+              reservation is confirmed.
             </div>
-            </div>
+          </div>
         </aside>
-        </div>
+      </div>
     </div>
-    );
+  );
 }

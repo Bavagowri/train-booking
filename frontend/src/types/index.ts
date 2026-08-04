@@ -47,6 +47,32 @@ export interface RouteStation {
   distanceFromStartKm: number;
 }
 
+export type PassengerCategory =
+  | "ADULT"
+  | "CHILD"
+  | "SENIOR"
+  | "STUDENT";
+
+export interface FareBandBreakdown {
+  fromKm: number;
+  toKm: number | null;
+  chargedKm: number;
+  ratePerKm: number;
+  amount: number;
+}
+
+export interface FareBreakdown {
+  baseFare: number;
+  distanceCharge: number;
+  reservedSurcharge: number;
+  peakSurcharge: number;
+  passengerDiscount: number;
+  minimumFare: number;
+  subtotal?: number;
+  isPeak: boolean;
+  bands?: FareBandBreakdown[];
+}
+
 export interface SeatAvailability {
   journey: {
     id: string;
@@ -57,11 +83,20 @@ export interface SeatAvailability {
   segment: {
     origin: RouteStation;
     destination: RouteStation;
+
     distanceKm: number;
     baseFare: number;
     distanceCharge: number;
+    reservedSurcharge: number;
+    peakSurcharge: number;
+    passengerDiscount: number;
+    minimumFare: number;
+    subtotal: number;
     fare: number;
+    isPeak: boolean;
+    passengerCategory: PassengerCategory;
     currency: "LKR";
+    bands: FareBandBreakdown[];
   };
 
   availability: {
@@ -97,6 +132,7 @@ export interface CreateBookingRequest {
   destinationStationId: string;
   passengerName: string;
   passengerEmail?: string;
+  passengerCategory: PassengerCategory;
 }
 
 export interface Booking {
@@ -107,6 +143,7 @@ export interface Booking {
   passenger: {
     name: string;
     email: string | null;
+    category?: PassengerCategory;
   };
 
   journey: {
@@ -153,6 +190,7 @@ export interface Booking {
   fare: {
     amount: number;
     currency: "LKR";
+    breakdown?: FareBreakdown | null;
   };
 
   createdAt: string;
@@ -171,6 +209,8 @@ export interface ApiErrorResponse {
     details?: unknown;
   };
 }
+
+/* Admin types */
 
 export interface AdminSummary {
   confirmedBookingCount: number;

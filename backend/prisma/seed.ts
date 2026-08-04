@@ -55,6 +55,7 @@ async function main(): Promise<void> {
    * Delete dependent data first.
    * JourneyCoach must be deleted before Journey and Coach.
    */
+  await prisma.waitlistEntry.deleteMany();
   await prisma.booking.deleteMany();
   await prisma.journeyCoach.deleteMany();
   await prisma.journey.deleteMany();
@@ -63,6 +64,8 @@ async function main(): Promise<void> {
   await prisma.seat.deleteMany();
   await prisma.coach.deleteMany();
   await prisma.station.deleteMany();
+  await prisma.fareBand.deleteMany();
+  await prisma.farePolicy.deleteMany();
   await prisma.admin.deleteMany();
 
   /* -----------------------------
@@ -261,6 +264,45 @@ async function main(): Promise<void> {
   console.log(
     `✅ ${createdCoaches.length} coaches assigned to train ${journey.trainNumber}`,
   );
+
+  const farePolicy = await prisma.farePolicy.create({
+    data: {
+      name: "Standard Reserved Fare 2026",
+      baseFare: 100,
+      minimumFare: 150,
+      reservedSurcharge: 100,
+      peakMultiplier: 1.1,
+      isActive: true,
+    },
+  });
+
+  await prisma.fareBand.createMany({
+    data: [
+      {
+        farePolicyId: farePolicy.id,
+        fromKm: 0,
+        toKm: 50,
+        ratePerKm: 5,
+        displayOrder: 1,
+      },
+      {
+        farePolicyId: farePolicy.id,
+        fromKm: 50,
+        toKm: 150,
+        ratePerKm: 4,
+        displayOrder: 2,
+      },
+      {
+        farePolicyId: farePolicy.id,
+        fromKm: 150,
+        toKm: null,
+        ratePerKm: 3,
+        displayOrder: 3,
+      },
+    ],
+  });
+
+  console.log("✅ Fare policy and distance bands created");
 
   /* -----------------------------
    Development Admin

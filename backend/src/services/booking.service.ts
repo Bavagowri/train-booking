@@ -75,12 +75,18 @@ export class BookingService {
      * Fare is always calculated by the backend.
      */
     const fareResult =
-      fareService.calculateFare({
+      await fareService.calculateFare({
         originDistanceKm:
           segment.origin.distanceFromStartKm,
 
         destinationDistanceKm:
           segment.destination.distanceFromStartKm,
+
+        journeyDepartureTime:
+          segment.journey.departureTime,
+
+        passengerCategory:
+          input.passengerCategory,
       });
 
     const booking: BookingWithDetails =
@@ -193,6 +199,38 @@ export class BookingService {
           const bookingReference =
             generateBookingReference();
 
+          const fareBreakdown: Prisma.InputJsonObject = {
+            baseFare: fareResult.baseFare,
+            distanceCharge:
+              fareResult.distanceCharge,
+            reservedSurcharge:
+              fareResult.reservedSurcharge,
+            peakSurcharge:
+              fareResult.peakSurcharge,
+            passengerDiscount:
+              fareResult.passengerDiscount,
+            subtotal:
+              fareResult.subtotal,
+            minimumFare:
+              fareResult.minimumFare,
+            isPeak:
+              fareResult.isPeak,
+            passengerCategory:
+              fareResult.passengerCategory,
+            currency:
+              fareResult.currency,
+
+            bands: fareResult.bands.map(
+              (band): Prisma.InputJsonObject => ({
+                fromKm: band.fromKm,
+                toKm: band.toKm,
+                chargedKm: band.chargedKm,
+                ratePerKm: band.ratePerKm,
+                amount: band.amount,
+              }),
+            ),
+          };
+
           return transaction.booking.create({
             data: {
               bookingReference,
@@ -202,6 +240,9 @@ export class BookingService {
 
               passengerEmail:
                 input.passengerEmail ?? null,
+
+              passengerCategory:
+                input.passengerCategory,
 
               journeyId: input.journeyId,
               seatId: input.seatId,
@@ -221,12 +262,14 @@ export class BookingService {
               distanceKm:
                 fareResult.distanceKm,
 
-              fare: fareResult.fare,
+              fare:
+                fareResult.fare,
+
+              fareBreakdown,
 
               status:
                 BookingStatus.CONFIRMED,
             },
-
             include: bookingInclude,
           });
         },
@@ -272,6 +315,8 @@ export class BookingService {
       passenger: {
         name: booking.passengerName,
         email: booking.passengerEmail,
+        category:
+          booking.passengerCategory,
       },
 
       journey: {
@@ -359,6 +404,8 @@ export class BookingService {
       fare: {
         amount: Number(booking.fare),
         currency: "LKR",
+        breakdown:
+          booking.fareBreakdown,
       },
 
       createdAt: booking.createdAt,

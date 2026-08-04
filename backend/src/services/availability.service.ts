@@ -20,12 +20,15 @@ export class AvailabilityService {
         destinationRouteStationId,
       );
 
-    const fare = fareService.calculateFare({
+    const fare = await fareService.calculateFare({
       originDistanceKm:
         segment.origin.distanceFromStartKm,
 
       destinationDistanceKm:
         segment.destination.distanceFromStartKm,
+
+      journeyDepartureTime:
+        segment.journey.departureTime,
     });
 
     const [

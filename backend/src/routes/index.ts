@@ -6,6 +6,7 @@ import { bookingRouter } from "./booking.routes.js";
 import { adminRouter } from "./admin.routes.js";
 import { adminAuthRouter } from "./adminAuth.routes.js";
 import { requireAdminAuth } from "../middleware/requireAdminAuth.js";
+import { waitlistRouter } from "./waitlist.routes.js";
 
 export const apiRouter = Router();
 
@@ -47,4 +48,8 @@ apiRouter.use(
   "/admin",
   requireAdminAuth,
   adminRouter,
+);
+apiRouter.use(
+  "/waitlist",
+  waitlistRouter,
 );

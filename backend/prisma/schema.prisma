@@ -47,21 +47,25 @@ model RouteStation {
   originBookings      Booking[] @relation("OriginStation")
   destinationBookings Booking[] @relation("DestinationStation")
 
+  waitlistOriginEntries      WaitlistEntry[] @relation("WaitlistOriginStation")
+  waitlistDestinationEntries WaitlistEntry[] @relation("WaitlistDestinationStation")
+
   @@unique([routeId, stopOrder])
   @@unique([routeId, stationId])
   @@index([routeId, stopOrder])
 }
 
 model Journey {
-  id             String         @id @default(cuid())
-  routeId        String
-  trainNumber    String
-  departureTime  DateTime
-  route          Route          @relation(fields: [routeId], references: [id])
-  bookings       Booking[]
-  journeyCoaches JourneyCoach[]
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id              String          @id @default(cuid())
+  routeId         String
+  trainNumber     String
+  departureTime   DateTime
+  route           Route           @relation(fields: [routeId], references: [id])
+  bookings        Booking[]
+  journeyCoaches  JourneyCoach[]
+  waitlistEntries WaitlistEntry[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   @@index([routeId, departureTime])
 }
@@ -106,15 +110,19 @@ model Seat {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  offeredWaitlistEntries WaitlistEntry[] @relation("WaitlistOfferedSeat")
+
   @@unique([coachId, seatNumber])
   @@index([coachId])
 }
 
 model Booking {
-  id                        String  @id @default(cuid())
-  bookingReference          String  @unique
-  passengerName             String
-  passengerEmail            String?
+  id                String            @id @default(cuid())
+  bookingReference  String            @unique
+  passengerName     String
+  passengerEmail    String?
+  passengerCategory PassengerCategory @default(ADULT)
+
   journeyId                 String
   seatId                    String
   originRouteStationId      String
@@ -123,9 +131,10 @@ model Booking {
   originOrder      Int
   destinationOrder Int
 
-  distanceKm Decimal       @db.Decimal(10, 2)
-  fare       Decimal       @db.Decimal(10, 2)
-  status     BookingStatus @default(CONFIRMED)
+  distanceKm    Decimal       @db.Decimal(10, 2)
+  fare          Decimal       @db.Decimal(10, 2)
+  fareBreakdown Json?
+  status        BookingStatus @default(CONFIRMED)
 
   journey                 Journey      @relation(fields: [journeyId], references: [id])
   seat                    Seat         @relation(fields: [seatId], references: [id])
@@ -157,4 +166,86 @@ model Admin {
 
   @@index([email])
   @@index([isActive])
+}
+
+enum PassengerCategory {
+  ADULT
+  CHILD
+  SENIOR
+  STUDENT
+}
+
+enum WaitlistStatus {
+  WAITING
+  OFFERED
+  FULFILLED
+  CANCELLED
+  EXPIRED
+}
+
+model FarePolicy {
+  id                String     @id @default(cuid())
+  name              String
+  baseFare          Decimal    @db.Decimal(10, 2)
+  minimumFare       Decimal    @db.Decimal(10, 2)
+  reservedSurcharge Decimal    @db.Decimal(10, 2)
+  peakMultiplier    Decimal    @default(1.10) @db.Decimal(5, 2)
+  activeFrom        DateTime?
+  activeUntil       DateTime?
+  isActive          Boolean    @default(true)
+  fareBands         FareBand[]
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([isActive])
+  @@index([isActive, activeFrom, activeUntil])
+}
+
+model FareBand {
+  id           String   @id @default(cuid())
+  farePolicyId String
+  fromKm       Decimal  @db.Decimal(10, 2)
+  toKm         Decimal? @db.Decimal(10, 2)
+  ratePerKm    Decimal  @db.Decimal(10, 2)
+  displayOrder Int
+
+  farePolicy FarePolicy @relation(fields: [farePolicyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([farePolicyId, displayOrder])
+  @@index([farePolicyId])
+}
+
+model WaitlistEntry {
+  id                        String  @id @default(cuid())
+  waitlistReference         String  @unique
+  journeyId                 String
+  originRouteStationId      String
+  destinationRouteStationId String
+  offeredSeatId             String?
+
+  originOrder      Int
+  destinationOrder Int
+
+  passengerName     String
+  passengerEmail    String
+  passengerCategory PassengerCategory @default(ADULT)
+
+  status    WaitlistStatus @default(WAITING)
+  offeredAt DateTime?
+  expiresAt DateTime?
+
+  journey                 Journey      @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  originRouteStation      RouteStation @relation("WaitlistOriginStation", fields: [originRouteStationId], references: [id], onDelete: Cascade)
+  destinationRouteStation RouteStation @relation("WaitlistDestinationStation", fields: [destinationRouteStationId], references: [id], onDelete: Cascade)
+  offeredSeat             Seat?        @relation("WaitlistOfferedSeat", fields: [offeredSeatId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([journeyId, status, createdAt])
+  @@index([journeyId, originOrder, destinationOrder])
+  @@index([journeyId, originRouteStationId, destinationRouteStationId, passengerEmail, status])
 }

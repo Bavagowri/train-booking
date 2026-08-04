@@ -1,77 +1,36 @@
-# Segment-Based Train Seat Booking System
+# Segment-Based Train Booking System
 
-A full-stack train reservation application designed for Sri Lanka's Colombo Fort–Badulla railway line.
+A full-stack train reservation application that supports booking a physical seat for only part of a train journey.
 
-The system allows the same reserved seat to be booked by multiple passengers for non-overlapping sections of one train journey. For example, one passenger can reserve a seat from Colombo Fort to Kandy, and another passenger can reserve the same physical seat from Kandy to Badulla.
+Unlike a traditional reservation system, a seat becomes available again after a passenger leaves the train. For example:
 
-## Project Status
+- Passenger A books Colombo Fort → Kandy
+- Passenger B can book the same physical seat from Kandy → Badulla
+- A booking that overlaps Passenger A’s segment is rejected
 
-The project foundation and database layer are currently implemented.
+The system includes a passenger booking interface, journey-specific coach allocation, concurrency-safe reservations, configurable fare calculation, and a protected administrator dashboard.
 
-Completed:
+---
 
-* React and TypeScript frontend setup
-* Express and TypeScript backend setup
-* PostgreSQL database running through Docker Compose
-* Prisma ORM configuration
-* Initial database migration
-* Configurable station, route, coach, seat, journey, and booking models
-* Seed data for the Colombo Fort–Badulla route
-* Three reserved coaches with forty seats each
-* Five unreserved coaches
-* One sample train journey
+## Features
 
-In progress:
+### Passenger booking
 
-* Journey and station APIs
-* Segment-based seat availability
-* Concurrency-safe booking
-* Fare calculation
-* React booking interface
-* Complete Docker setup for frontend and backend
+- View scheduled train journeys
+- Select an origin and destination
+- Restrict destinations to stations after the selected origin
+- View available reserved seats for the selected journey segment
+- Select seats using a visual coach seat map
+- Enter passenger information
+- Select a passenger category
+- View a detailed fare breakdown
+- Confirm a booking
+- Retrieve booking information using a booking reference
+- Reuse the same seat for adjacent non-overlapping journey segments
 
-## Core Requirement
+### Segment-based seat allocation
 
-A reserved seat should become available again after the passenger using it leaves the train.
-
-Example:
-
-```text
-Passenger A: Colombo Fort → Kandy
-Passenger B: Kandy → Badulla
-```
-
-Both passengers can use the same seat because their journey segments are adjacent and do not overlap.
-
-However:
-
-```text
-Passenger A: Colombo Fort → Kandy
-Passenger B: Gampaha → Ella
-```
-
-These bookings cannot use the same seat because their journey segments overlap.
-
-## Segment Model
-
-Each route station has a numerical stop order.
-
-Example:
-
-```text
-Colombo Fort  1
-Ragama        2
-Gampaha       3
-Veyangoda     4
-Rambukkana    5
-Kandy         6
-Hatton        7
-Nanu Oya      8
-Ella          9
-Badulla      10
-```
-
-A booking is treated as a half-open interval:
+Seat occupancy is represented using half-open route intervals:
 
 ```text
 [originOrder, destinationOrder)
@@ -85,218 +44,320 @@ AND
 existingDestination > requestedOrigin
 ```
 
-Using half-open intervals allows adjacent journeys to reuse the same seat.
-
-For example:
+This allows adjacent bookings:
 
 ```text
-Colombo Fort → Kandy = [1, 6)
-Kandy → Badulla      = [6, 10)
+Colombo Fort → Kandy
+Kandy → Badulla
 ```
 
-These intervals do not overlap.
-
-## Planned Concurrency Strategy
-
-Creating a booking will happen inside a PostgreSQL transaction.
-
-The planned flow is:
-
-1. Begin a database transaction.
-2. Lock the selected seat using `SELECT ... FOR UPDATE`.
-3. Check for overlapping confirmed bookings.
-4. Reject the request if a conflict exists.
-5. Create the booking if the seat remains available.
-6. Commit the transaction.
-
-This ensures that two passengers cannot successfully reserve the same seat for overlapping segments at the same time.
-
-## Planned Fare Calculation
-
-The initial fare model will use the distance between the selected stations.
+while rejecting overlapping bookings:
 
 ```text
-fare = base fare + distance travelled × price per kilometre
+Colombo Fort → Kandy
+Gampaha → Ella
 ```
 
-The backend will calculate the fare. The frontend will not be allowed to submit or control the final price.
+### Concurrency-safe booking
 
-The fare model can later be extended to support:
+The availability endpoint is informative only. Availability is checked again during booking.
 
-* Different coach classes
-* Peak and off-peak pricing
-* Discounts
-* Taxes
-* Minimum fares
-* Station-specific rates
+The booking transaction:
 
-## Technology Stack
+1. Validates the journey and route segment
+2. Locks the selected seat row using PostgreSQL `FOR UPDATE`
+3. Verifies that the seat belongs to a reserved coach assigned to the journey
+4. Rechecks for overlapping confirmed bookings
+5. Calculates the fare on the backend
+6. Creates exactly one confirmed booking
+
+When two users attempt to reserve the same seat for overlapping segments concurrently:
+
+```text
+One request succeeds with 201 Created
+One request fails with 409 Conflict
+```
+
+### Journey-specific coach allocation
+
+Coaches are assigned to journeys through the `JourneyCoach` model.
+
+```text
+Journey
+  └── JourneyCoach
+        └── Coach
+              └── Seat
+```
+
+This ensures that the availability API returns only seats from reserved coaches assigned to the selected journey.
+
+The current seed data contains:
+
+- 3 reserved coaches
+- 5 unreserved coaches
+- 40 seats per reserved coach
+- 120 reservable seats in total
+
+Unreserved coaches are assigned to the journey but do not appear in the seat-selection interface because they do not use assigned seating.
+
+### Configurable fare engine
+
+Fare calculation is handled entirely by the backend.
+
+The fare engine currently supports:
+
+- Base fare
+- Minimum fare
+- Progressive distance bands
+- Reserved-seat surcharge
+- Peak-time surcharge
+- Passenger-category discounts
+- Detailed fare breakdown
+- Fare snapshot stored with the booking
+
+Current passenger categories:
+
+| Category | Discount |
+|---|---:|
+| Adult | 0% |
+| Child | 50% |
+| Senior | 20% |
+| Student | 10% |
+
+Seeded progressive distance bands:
+
+| Distance band | Rate |
+|---|---:|
+| First 50 km | LKR 5 per km |
+| Next 100 km | LKR 4 per km |
+| Above 150 km | LKR 3 per km |
+
+The frontend displays an estimate, but the backend recalculates and confirms the final fare when the booking is created.
+
+### Administrator portal
+
+The application includes a protected administrator area with:
+
+- Admin login
+- Password hashing with bcrypt
+- JWT authentication
+- Protected admin API routes
+- Dashboard summary
+- Confirmed booking count
+- Cancelled booking count
+- Total revenue
+- Scheduled journey count
+- Segment-specific occupancy
+- Coach occupancy
+- Recent booking activity
+- Administrator logout
+
+The admin dashboard is available at:
+
+```text
+/admin/login
+```
+
+---
+
+## Technology stack
 
 ### Frontend
 
-* React
-* TypeScript
-* Vite
-* TanStack Query
-* Axios
+- React
+- TypeScript
+- Vite
+- Axios
+- React Router
+- CSS
 
 ### Backend
 
-* Node.js
-* Express
-* TypeScript
-* Zod
-* Prisma ORM
+- Node.js
+- Express
+- TypeScript
+- Prisma ORM
+- PostgreSQL
+- Zod
+- JSON Web Tokens
+- bcryptjs
 
-### Database and Infrastructure
+### Infrastructure
 
-* PostgreSQL
-* Docker
-* Docker Compose
+- Docker
+- Docker Compose
+- PostgreSQL container
 
-## Project Structure
+---
+
+## Project structure
 
 ```text
 train-booking/
-├── frontend/
-│   ├── src/
-│   ├── package.json
-│   └── vite.config.ts
-│
 ├── backend/
 │   ├── prisma/
 │   │   ├── migrations/
 │   │   ├── schema.prisma
 │   │   └── seed.ts
 │   ├── src/
+│   │   ├── controllers/
+│   │   ├── lib/
+│   │   ├── middleware/
+│   │   ├── routes/
+│   │   ├── services/
+│   │   ├── types/
+│   │   ├── utils/
+│   │   ├── validators/
+│   │   ├── app.ts
+│   │   └── server.ts
 │   ├── .env.example
 │   ├── package.json
-│   └── prisma.config.ts
-│
-├── docker-compose.yml
+│   ├── prisma.config.ts
+│   └── tsconfig.json
+├── frontend/
+│   ├── src/
+│   │   ├── api/
+│   │   ├── auth/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── types/
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── .env.example
+│   ├── package.json
+│   └── vite.config.ts
+├── compose.yaml
 ├── .gitignore
 └── README.md
 ```
 
-## Database Design
+---
 
-### Station
+## Database design
 
-Represents a physical railway station.
-
-Important fields:
-
-* `id`
-* `code`
-* `name`
-
-### Route
-
-Represents an ordered railway route.
-
-The initial route is:
+Main models:
 
 ```text
-Colombo Fort → Badulla
+Station
+Route
+RouteStation
+Journey
+Coach
+JourneyCoach
+Seat
+Booking
+FarePolicy
+FareBand
+Admin
+WaitlistEntry
 ```
 
-### RouteStation
+### Core relationships
 
-Connects a station to a route.
+```text
+Route
+  └── RouteStation
+        └── Station
 
-It stores:
+Route
+  └── Journey
+        ├── JourneyCoach
+        │     └── Coach
+        │           └── Seat
+        ├── Booking
+        └── WaitlistEntry
+```
 
-* Station position using `stopOrder`
-* Distance from the beginning of the route
-* Relationship to the route and station
+### Booking data snapshot
 
-This keeps route ordering configurable instead of hardcoding station positions in application logic.
+Each booking stores:
 
-### Journey
+- Journey ID
+- Seat ID
+- Origin and destination route-station IDs
+- Origin and destination stop order
+- Distance
+- Passenger details
+- Passenger category
+- Final charged fare
+- Fare breakdown
+- Booking status
 
-Represents a specific train departure.
+The fare is stored at booking time so future fare-policy changes do not alter historical bookings.
 
-A journey includes:
+---
 
-* Route
-* Train number
-* Departure time
+## Seed data
 
-Bookings belong to a journey so the same physical seat can be booked independently on different train departures.
+The seed creates:
 
-### Coach
+| Data | Count |
+|---|---:|
+| Stations | 10 |
+| Routes | 1 |
+| Route stations | 10 |
+| Journeys | 1 |
+| Coaches | 8 |
+| Journey-coach assignments | 8 |
+| Reserved coaches | 3 |
+| Unreserved coaches | 5 |
+| Reserved seats | 120 |
+| Fare policies | 1 |
+| Fare bands | 3 |
+| Administrators | 1 |
+| Bookings | 0 |
+| Waitlist entries | 0 |
 
-Represents a train coach.
+Seeded route:
 
-Coach types:
+```text
+Colombo Fort
+Ragama
+Gampaha
+Veyangoda
+Rambukkana
+Kandy
+Hatton
+Nanu Oya
+Ella
+Badulla
+```
 
-* `RESERVED`
-* `UNRESERVED`
+Seeded train:
 
-The initial configuration contains:
+```text
+Train number: 1005
+Route: Colombo Fort → Badulla
+Departure: next day at 05:55
+```
 
-* Three reserved coaches
-* Five unreserved coaches
-
-### Seat
-
-Represents an assignable seat inside a reserved coach.
-
-Each reserved coach initially contains forty seats.
-
-Seat counts are generated from configuration rather than manually hardcoded into the database.
-
-### Booking
-
-Represents a passenger seat reservation.
-
-A booking stores:
-
-* Journey
-* Seat
-* Origin route station
-* Destination route station
-* Origin stop order
-* Destination stop order
-* Travel distance
-* Fare
-* Booking status
-* Passenger information
-* Booking reference
-
-## Seed Data
-
-The development database contains:
-
-* 10 stations
-* 1 route
-* 10 ordered route stations
-* 3 reserved coaches
-* 5 unreserved coaches
-* 40 seats per reserved coach
-* 120 reserved seats in total
-* 1 sample journey
-* 0 initial bookings
+---
 
 ## Prerequisites
 
-Install the following:
+Install:
 
-* Node.js 22
-* npm
-* Docker Desktop
-* Git
+- Node.js 22 or later
+- npm
+- Docker Desktop
+- Git
 
-Confirm the versions:
+Verify:
 
 ```bash
-node --version
-npm --version
+node -v
+npm -v
 docker --version
 docker compose version
 ```
 
-## Environment Configuration
+Make sure Docker Desktop is running before starting the database.
+
+---
+
+## Environment variables
+
+### Backend
 
 Create:
 
@@ -304,21 +365,54 @@ Create:
 backend/.env
 ```
 
-Use:
+Example:
 
 ```env
 DATABASE_URL="postgresql://train_user:train_password@localhost:5433/train_booking?schema=public"
+
 PORT=4000
 FRONTEND_URL="http://localhost:5173"
+
+JWT_SECRET="replace-with-a-random-secret-at-least-32-characters"
+JWT_EXPIRES_IN="2h"
+
+SEED_ADMIN_NAME="System Administrator"
+SEED_ADMIN_EMAIL="admin@trainbooking.lk"
+SEED_ADMIN_PASSWORD="replace-with-a-development-password"
 ```
 
-The Docker PostgreSQL service uses host port `5433` because port `5432` may already be used by a locally installed PostgreSQL server.
+Generate a JWT secret:
 
-Do not commit `.env`.
+```bash
+openssl rand -hex 32
+```
 
-Use `.env.example` to document required environment variables.
+Do not commit the real `.env` file.
 
-## Running the Database
+### Frontend
+
+Create:
+
+```text
+frontend/.env
+```
+
+```env
+VITE_API_BASE_URL="http://localhost:4000/api"
+```
+
+---
+
+## Local development setup
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Bavagowri/train-booking.git
+cd train-booking
+```
+
+### 2. Start PostgreSQL
 
 From the project root:
 
@@ -326,264 +420,442 @@ From the project root:
 docker compose up -d database
 ```
 
-Check the service:
+Check the container:
 
 ```bash
 docker compose ps
 ```
 
-View database logs:
-
-```bash
-docker compose logs database
-```
-
-Stop the services:
-
-```bash
-docker compose down
-```
-
-Stop services and delete database data:
-
-```bash
-docker compose down -v
-```
-
-The `-v` command permanently removes the development database volume.
-
-## Prisma Commands
-
-Run these commands from the `backend` directory.
-
-Format the schema:
-
-```bash
-npx prisma format
-```
-
-Validate the schema:
-
-```bash
-npx prisma validate
-```
-
-Generate Prisma Client:
-
-```bash
-npx prisma generate
-```
-
-Create or apply a development migration:
-
-```bash
-npx prisma migrate dev
-```
-
-Check migration status:
-
-```bash
-npx prisma migrate status
-```
-
-Seed the database:
-
-```bash
-npm run prisma:seed
-```
-
-Open Prisma Studio:
-
-```bash
-npx prisma studio
-```
-
-## Initial Setup
-
-Clone the repository:
-
-```bash
-git clone <repository-url>
-cd train-booking
-```
-
-Start PostgreSQL:
-
-```bash
-docker compose up -d database
-```
-
-Install backend dependencies:
+### 3. Install backend dependencies
 
 ```bash
 cd backend
-nvm use
 npm install
 ```
 
-Create the environment file:
+### 4. Run Prisma migrations
 
 ```bash
-cp .env.example .env
-```
-
-Apply database migrations:
-
-```bash
+npx prisma generate
 npx prisma migrate dev
 ```
 
-Seed the database:
+### 5. Seed the database
 
 ```bash
 npm run prisma:seed
 ```
 
-Start the backend during development:
+### 6. Start the backend
 
 ```bash
 npm run dev
 ```
 
-In another terminal, install and run the frontend:
+Backend URL:
+
+```text
+http://localhost:4000
+```
+
+### 7. Install frontend dependencies
+
+Open another terminal:
 
 ```bash
 cd frontend
 npm install
+```
+
+### 8. Start the frontend
+
+```bash
 npm run dev
 ```
 
-## Planned API Endpoints
+Frontend URL:
 
-### Health check
-
-```http
-GET /api/health
+```text
+http://localhost:5173
 ```
 
-### List journeys
+---
 
-```http
-GET /api/journeys
+## Useful development commands
+
+### Backend
+
+```bash
+npm run dev
+npm run build
+npm start
+npm run prisma:seed
+npx prisma generate
+npx prisma migrate dev
+npx prisma studio
 ```
 
-### Get journey and ordered stations
+### Frontend
 
-```http
-GET /api/journeys/:journeyId
+```bash
+npm run dev
+npm run build
+npm run preview
 ```
 
-### Find available seats
+### Docker
 
-```http
-GET /api/journeys/:journeyId/available-seats
+```bash
+docker compose up -d database
+docker compose ps
+docker compose logs database
+docker compose down
 ```
 
-Expected query parameters:
+---
+
+## API endpoints
+
+Base URL:
+
+```text
+http://localhost:4000/api
+```
+
+### General
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/` | API information |
+| GET | `/health` | Application and database health |
+
+### Journeys
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/journeys` | List journeys |
+| GET | `/journeys/:journeyId` | Get journey details |
+| GET | `/journeys/:journeyId/available-seats` | Get segment-specific availability and fare |
+
+Availability query parameters:
 
 ```text
 originStationId
 destinationStationId
 ```
 
-### Create booking
-
-```http
-POST /api/bookings
-```
-
-### Retrieve booking
-
-```http
-GET /api/bookings/:bookingReference
-```
-
-## Planned Core User Flow
-
-1. Select a train journey.
-2. Select an origin station.
-3. Select a destination station.
-4. Search for seats available on that segment.
-5. Select an available reserved seat.
-6. Enter passenger details.
-7. Confirm the booking.
-8. Receive a booking reference.
-
-## Design Decisions
-
-### Why PostgreSQL?
-
-PostgreSQL provides reliable transactions and row-level locking, which are important for preventing concurrent booking conflicts.
-
-### Why Prisma?
-
-Prisma provides:
-
-* Type-safe database access
-* Database migrations
-* Schema-based modelling
-* A convenient development interface through Prisma Studio
-
-### Why store station order?
-
-Seat availability depends on whether journey segments overlap. Numerical station ordering makes overlap checks straightforward and efficient.
-
-### Why include Journey?
-
-Availability must be calculated for a particular train departure. The same seat can therefore be booked for the same segment on different journeys.
-
-### Why not create one database row for every segment?
-
-A separate occupancy row for every seat and every station pair would create more records and more complicated updates.
-
-The current design stores one booking interval and detects conflicts using station order values. This is simpler for the initial implementation while remaining scalable for the assignment requirements.
-
-### Why are unreserved coaches included without seats?
-
-The assignment distinguishes reserved and unreserved coaches. Only reserved coaches require seat assignment. Unreserved coaches are represented for accurate train configuration, but individual seats are not created for them.
-
-## Future Improvements
-
-After the core booking system is complete, possible enhancements include:
-
-* Visual seat map
-* Booking cancellation
-* Waitlist support
-* Admin occupancy dashboard
-* Revenue reports
-* Authentication
-* Payment integration
-* Email booking confirmation
-* Real-time seat availability updates
-* Multiple routes and return journeys
-* Coach-specific fares
-* Automated integration and concurrency tests
-
-## Version Control
-
-The project uses Git and GitHub.
-
-Development should use small, meaningful commits such as:
+Example:
 
 ```text
-feat: initialize train booking application foundation
-feat: add journey and station endpoints
-feat: implement segment-based seat availability
-feat: add concurrency-safe booking transactions
-feat: build train booking interface
-test: cover overlapping and adjacent booking segments
-chore: add complete Docker Compose setup
-docs: document architecture and design decisions
+GET /api/journeys/:journeyId/available-seats
+    ?originStationId=:originRouteStationId
+    &destinationStationId=:destinationRouteStationId
 ```
 
-## Security
+### Bookings
 
-* Secrets are stored in environment variables.
-* `.env` files are excluded from version control.
-* The backend will validate request data using Zod.
-* Fare values will be calculated by the backend.
-* Database transactions will protect booking consistency.
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/bookings` | Create a booking |
+| GET | `/bookings/:bookingReference` | Retrieve a booking |
+
+Example request:
+
+```json
+{
+  "journeyId": "journey-id",
+  "seatId": "seat-id",
+  "originStationId": "origin-route-station-id",
+  "destinationStationId": "destination-route-station-id",
+  "passengerName": "Example Passenger",
+  "passengerEmail": "passenger@example.com",
+  "passengerCategory": "ADULT"
+}
+```
+
+### Admin authentication
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/admin/auth/login` | Admin login |
+| GET | `/admin/auth/me` | Get authenticated admin |
+
+Protected requests use:
+
+```http
+Authorization: Bearer <token>
+```
+
+### Admin dashboard
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/admin/summary` | Dashboard summary |
+| GET | `/admin/bookings` | Recent bookings |
+| GET | `/admin/journeys/:journeyId/analytics` | Segment occupancy analytics |
+
+Analytics query parameters:
+
+```text
+originStationId
+destinationStationId
+```
+
+### Waitlist
+
+The database schema supports segment-specific waitlist entries.
+
+Planned or partially implemented endpoints:
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/waitlist` | Join a fully booked segment waitlist |
+| GET | `/waitlist/:waitlistReference` | Retrieve waitlist status |
+| GET | `/admin/waitlist` | View waitlist entries |
+
+Update this section when the complete waitlist frontend and admin workflow are finished.
+
+---
+
+## Example booking tests
+
+### Valid booking
+
+```text
+Colombo Fort → Kandy
+Seat R1-01
+```
+
+Expected:
+
+```text
+201 Created
+```
+
+### Overlapping booking
+
+Existing:
+
+```text
+Colombo Fort → Kandy
+```
+
+Attempt:
+
+```text
+Gampaha → Ella
+```
+
+Expected:
+
+```text
+409 SEAT_UNAVAILABLE
+```
+
+### Adjacent booking
+
+Existing:
+
+```text
+Colombo Fort → Kandy
+```
+
+Attempt:
+
+```text
+Kandy → Badulla
+```
+
+Expected:
+
+```text
+201 Created
+```
+
+### Invalid seat assignment
+
+Attempt to book a seat from a coach that is not assigned to the selected journey.
+
+Expected:
+
+```text
+400 SEAT_NOT_ASSIGNED_TO_JOURNEY
+```
+
+---
+
+## Error response format
+
+Errors use a consistent structure:
+
+```json
+{
+  "error": {
+    "code": "SEAT_UNAVAILABLE",
+    "message": "This seat is no longer available for the selected segment."
+  }
+}
+```
+
+Validation errors may also include details:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "The booking request contains invalid data.",
+    "details": {
+      "formErrors": [],
+      "fieldErrors": {}
+    }
+  }
+}
+```
+
+---
+
+## Design decisions
+
+### Why use route-station IDs?
+
+A station may appear on multiple routes. `RouteStation` stores the station’s position and distance within one specific route.
+
+### Why store origin and destination order in bookings?
+
+The stop order makes overlap checks efficient and avoids repeatedly reconstructing segment positions.
+
+### Why use half-open intervals?
+
+Using:
+
+```text
+[originOrder, destinationOrder)
+```
+
+allows a seat to be reused immediately at the station where the previous passenger leaves.
+
+### Why lock the seat row?
+
+A normal availability check can become stale before booking. Locking the selected seat inside the transaction serializes competing booking attempts for that physical seat.
+
+### Why recheck availability inside the transaction?
+
+Two customers can view the seat as available at the same time. The authoritative conflict check must happen after the lock is acquired.
+
+### Why use `JourneyCoach`?
+
+Without a journey-coach relationship, every journey would incorrectly see every coach in the database. `JourneyCoach` makes train formation configurable per scheduled departure.
+
+### Why calculate fares on the backend?
+
+Frontend values can be modified by users. The backend must calculate the final fare using the active policy and passenger category.
+
+### Why store the fare breakdown?
+
+Fare rules may change in the future. A stored snapshot explains exactly how the historical booking price was calculated.
+
+---
+
+## Security notes
+
+Current security measures include:
+
+- Passwords hashed with bcrypt
+- JWT-based administrator authentication
+- Protected admin API routes
+- Active-admin verification
+- Input validation with Zod
+- Helmet security headers
+- CORS configuration
+- Parameterized Prisma queries
+- Backend-authoritative fare and booking validation
+
+For a production launch, additional measures should include:
+
+- HTTP-only secure cookies
+- Login rate limiting
+- Refresh-token rotation or server-side sessions
+- CSRF protection where applicable
+- Audit logs
+- Password reset workflow
+- Role-based authorization
+- HTTPS-only deployment
+- Secret management
+- Monitoring and alerting
+
+---
+
+## Current status
+
+```text
+✔ Project setup
+✔ Docker PostgreSQL
+✔ Prisma schema
+✔ Database migrations
+✔ Seed data
+✔ Health API
+✔ Journey API
+✔ Station and segment validation
+✔ Journey-specific coach allocation
+✔ Configurable fare engine
+✔ Progressive distance pricing
+✔ Passenger-category discounts
+✔ Seat availability service
+✔ Availability API
+✔ Concurrency-safe booking service
+✔ Booking API
+✔ Booking retrieval API
+✔ Passenger React interface
+✔ Visual reserved coach seat map
+✔ Fare breakdown display
+✔ Booking confirmation
+✔ Admin database model
+✔ Admin JWT authentication
+✔ Protected admin routes
+✔ Admin dashboard
+△ Waitlist schema and backend workflow
+⬜ Waitlist passenger interface
+⬜ Admin waitlist management
+⬜ Full application Dockerization
+⬜ Automated tests
+⬜ Production deployment configuration
+```
+
+---
+
+## Planned improvements
+
+- Complete waitlist passenger workflow
+- Automatic waitlist promotion after cancellation
+- Expiring seat offers
+- Email notifications
+- Booking cancellation API
+- Admin waitlist management
+- Fare-policy administration
+- Additional journeys and routes
+- Multiple train formations
+- Automated unit, integration, and concurrency tests
+- Full one-command Docker startup
+- CSV report export
+- Production authentication hardening
+
+---
+
+## Assumptions and limitations
+
+- Only forward travel on the seeded route is supported
+- Only reserved coaches allow seat selection
+- Unreserved coaches do not have assigned seats
+- One active fare policy is expected
+- Fare-policy overlap and fare-band gaps are validated by application logic or seed configuration
+- Passenger discount eligibility is not externally verified
+- Waitlist automatic promotion is not yet complete
+- Admin credentials created by the seed are for development only
+- The current admin dashboard is primarily read-only
+- The seeded departure time is created dynamically for the following day
+
+---
 
 ## License
 
-This project was created as part of a Software Engineer interview assignment.
+This project was created as a software engineering assignment and demonstration project.
